@@ -24,11 +24,13 @@ public:
     int tesuu;
     
     void init();
-    void init(int argc, char *argv[]);
+    void init(int argc, const char *argv[]);
     void print();
     
     bool isExposed(int layer, int x)const{return tableau[layer+1][x]== card_empty && tableau[layer+1][x+1]==card_empty;};
     bool isremovable(int layer, int x)const;
+    
+    void remove(int layer1, int x1, int layer2, int x2);
     
     int  c2i(char c);
     char i2c(int i){return " A234567890JQK*"[i];}
@@ -43,7 +45,7 @@ void Board::init()
     stock_len = stock_nowpos = pile_card = tesuu = 0;
 }
 /****************************************************************************/
-void Board::init(int argc, char *argv[])
+void Board::init(int argc, const char *argv[])
 {
     init();
     if( argc!= 1+LAYERS+1 ){
@@ -84,6 +86,15 @@ void Board::print()
     }
     printf("\n");
 }
+
+/****************************************************************************/
+void Board::remove(int layer1, int x1, int layer2, int x2)
+{
+    if(tableau[layer1][x1]==13){
+        tableau[layer1][x1] = card_empty;
+    }
+}
+
 /****************************************************************************/
 int Board::c2i(char c)
 {
@@ -145,7 +156,7 @@ void usage()
 
 /****************************************************************************/
 int test();
-int main(int argc, char *argv[])
+int main(int argc, const char *argv[])
 {
 #ifdef TEST
     if(argc>=2 && strcmp(argv[1],"--test")==0 ){
@@ -199,7 +210,12 @@ void FunctionTest::testDown(){
 /****************************************************************************/
 void FunctionTest::test_test()
 {
-
+    const char *testdata[]={"hoge", "7","3j","620","280j","4j0ak","7k5q58","12k8462",
+                     "4q17q0jkq716593394863599"};
+    pBoard->init(9, testdata);
+    pBoard->print();
+    pBoard->remove(7,3,0,0);
+    pBoard->print();
 }
 /****************************************************************************/
 int test()
