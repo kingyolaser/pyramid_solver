@@ -5,9 +5,9 @@
 #include <assert.h>
 
 /****************************************************************************/
-#define LAYERS    6
+#define LAYERS    7
 #define WIDTH     7
-#define STOCK_LEN 28
+#define STOCK_LEN 24
 
 class Board{
 public:
@@ -18,11 +18,13 @@ public:
 
     int tableau[LAYERS+2][WIDTH+2];  //例：[1][1]の上(画面上は下)に[1][2], [2][2]がかぶってる
     int stock[STOCK_LEN+1];     //stock[0]が最初のカード。nullターミネート
+    int stock_len;
     int stock_nowpos;
     int pile_card;
     int tesuu;
     
     void init();
+    void init(int argc, char *argv[]);
     void print();
     
     bool isExposed(int layer, int x)const{return tableau[layer+1][x]== card_empty && tableau[layer+1][x+1]==card_empty;};
@@ -37,21 +39,55 @@ public:
 void Board::init()
 {
     memset( tableau, 0, sizeof(tableau) );
+    memset( stock,   0, sizeof(stock)   );
+    stock_len = stock_nowpos = pile_card = tesuu = 0;
 }
+/****************************************************************************/
+void Board::init(int argc, char *argv[])
+{
+    init();
+    if( argc!= 1+LAYERS+1 ){
+        fprintf(stderr, "cmd line option num err.\n");
+    }
+
+    //場のデータ格納
+    for( int layer=1; layer<=LAYERS; layer++ ){
+        assert(strlen(argv[layer])==(size_t)layer);
+        for( int x=1; x<=layer; x++){
+            tableau[layer][x] = c2i(argv[layer][x-1]);
+        }
+    }
+    
+    //Stockデータ格納
+    assert(strlen(argv[LAYERS+1])==STOCK_LEN);
+    for( int i=0; i<STOCK_LEN; i++){
+        stock[i]=c2i(argv[LAYERS+1][i]);
+    }
+    stock_len = STOCK_LEN;
+}
+
 /****************************************************************************/
 void Board::print()
 {
-    for(int layer=0; layer<LAYERS; layer++ ){
+    printf("\n");
+    for(int layer=1; layer<=LAYERS; layer++ ){
         for( int i=0; i<LAYERS-layer; i++){printf(" ");}
-        for( int x=0; x<layer+1; x++ ){
+        for( int x=1; x<=layer; x++ ){
             printf("%c ", i2c(tableau[layer][x]));
         }
         printf("\n");
     }
+
+    printf("stock:\n");
+    for( int i=0; i<stock_len; i++ ){
+        printf("%c", i2c(stock[i]));
+    }
+    printf("\n");
 }
 /****************************************************************************/
 int Board::c2i(char c)
 {
+    c = toupper(c);
     const char table[] = "A234567890JQK";
     const char *pos = strchr( table, c);
     if( pos ){return pos-table+1;}
@@ -119,7 +155,7 @@ int main(int argc, char *argv[])
 
     Board board;
 
-    board.init();
+    board.init(argc,argv);
     board.print();
     return 0;
 }
