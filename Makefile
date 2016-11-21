@@ -18,3 +18,4 @@ test: pyramid_test
 clean:
 	rm -f pyramid.exe
 	rm -f pyramid_test.exe
+	rm -f *.stackdump
