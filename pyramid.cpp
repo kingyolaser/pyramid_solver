@@ -13,6 +13,7 @@ class Pos{
 public:
     int layer;
     int x;
+    Pos():layer(0),x(0){}
     Pos(int layer_, int x_):layer(layer_),x(x_){}
     
     static const Pos stock1;
@@ -25,6 +26,8 @@ const Pos Pos::nopos(0,0);
 
 class Move{
 public:
+    Move(){}
+    Move(const Pos &p1_, const Pos &p2_):p1(p1_),p2(p2_){}
     Pos p1,p2;
 };
 
@@ -36,7 +39,7 @@ public:
     };
 
     int tableau[LAYERS+2][WIDTH+2];  //例：[1][1]の上(画面上は下)に[1][2], [2][2]がかぶってる
-    int stock[STOCK_LEN+1];     //stock[0]が最初のカード。nullターミネート
+    int stock[STOCK_LEN+1];     //stock[0]が最初のカード。末尾にemptyをつける。
     int stock_len;
     int stock_nowpos;
     int pile_card;
@@ -46,8 +49,10 @@ public:
     void init(int argc, const char *argv[]);
     void print();
     
+    bool isComplete(){return tableau[1][1]==card_empty;}
     bool isExposed(int layer, int x)const{return tableau[layer+1][x]== card_empty && tableau[layer+1][x+1]==card_empty;};
     bool isremovable(int layer, int x)const;
+    void search_candidate(Move candidate[16], int *num);
     
     void remove(int layer1, int x1, int layer2, int x2);
     
@@ -104,6 +109,75 @@ void Board::print()
         printf("%c", i2c(stock[i]));
     }
     printf("\n");
+    for( int i=0; i<stock_nowpos; i++){printf(" ");}printf("^^\n");
+}
+/****************************************************************************/
+void Board::search_candidate(Move candidate[16], int *num)
+{
+    //exposedなcardを列挙
+    Pos exposed[7];
+    int expo_num = 0;
+    for( int x=1; x<=WIDTH; x++){
+        for( int layer=LAYERS; layer>=1; layer--){
+            if( tableau[layer][x]==card_empty ){continue;}
+            if( isExposed(layer,x) ){
+                assert(expo_num<=7);
+                exposed[expo_num] = Pos(layer,x);
+                expo_num++;
+            }
+            //empty以外なので、どっちにしろもう上を調べる必要なし
+            break;
+        }
+    }
+
+//#ifdef DEBUG
+    printf("exposed card: ");
+    for( int i=0; i<expo_num; i++){
+        printf("%d%d:", exposed[i].layer, exposed[i].x);
+    }
+    printf("\n");
+//#endif
+    
+    //足して13になる組を検索
+    *num = 0;
+    for( int i=0; i<expo_num; i++ ){
+        for( int j=i+1; j<expo_num; j++ ){
+            if( tableau[exposed[i].layer][exposed[i].x]
+              + tableau[exposed[j].layer][exposed[j].x] == 13 ){
+                assert(*num<16);
+                candidate[*num] = Move(exposed[i],exposed[j]);
+                (*num)++;
+            }
+        }
+    }
+
+    //ストックエリアとの組み合わせを検索
+    for( int i=0; i<expo_num; i++ ){
+        if( tableau[exposed[i].layer][exposed[i].x]
+                +stock[stock_nowpos] == 13 ){
+            candidate[*num] = Move(exposed[i], Pos::stock1);
+            (*num)++;
+        }
+    }
+
+    for( int i=0; i<expo_num; i++ ){
+        if( tableau[exposed[i].layer][exposed[i].x]
+                +stock[stock_nowpos+1] == 13 ){
+            candidate[*num] = Move(exposed[i], Pos::stock2);
+            (*num)++;
+        }
+    }
+
+//#ifdef DEBUG
+    printf("candidate: ");
+    for( int i=0; i<*num; i++){
+        printf("%d%dx%d%d:", candidate[i].p1.layer,
+                             candidate[i].p1.x,
+                             candidate[i].p2.layer,
+                             candidate[i].p2.x);
+    }
+//#endif
+
 }
 
 /****************************************************************************/
@@ -174,6 +248,20 @@ void usage()
 }
 
 /****************************************************************************/
+void solve(Board &board)
+{
+    if( board.isComplete() ){
+        board.print();
+        printf("Congraturation!!\n");
+        exit(0);
+    }
+
+    Move candidate[16];
+    int  num;
+    board.search_candidate(candidate, &num);
+}
+
+/****************************************************************************/
 int test();
 int main(int argc, const char *argv[])
 {
@@ -187,6 +275,7 @@ int main(int argc, const char *argv[])
 
     board.init(argc,argv);
     board.print();
+    solve(board);
     return 0;
 }
 /****************************************************************************/
