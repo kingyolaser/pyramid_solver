@@ -9,6 +9,25 @@
 #define WIDTH     7
 #define STOCK_LEN 24
 
+class Pos{
+public:
+    int layer;
+    int x;
+    Pos(int layer_, int x_):layer(layer_),x(x_){}
+    
+    static const Pos stock1;
+    static const Pos stock2;
+    static const Pos nopos;
+};
+const Pos Pos::stock1(-1,-1);
+const Pos Pos::stock2(-2,-2);
+const Pos Pos::nopos(0,0);
+
+class Move{
+public:
+    Pos p1,p2;
+};
+
 class Board{
 public:
     enum{
