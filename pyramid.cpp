@@ -33,9 +33,10 @@ const Pos Pos::nopos(0,0);
 /****************************************************************************/
 class Move{
 public:
-    Move(){}
-    Move(const Pos &p1_, const Pos &p2_):p1(p1_),p2(p2_){}
+    Move(): isDraw(false){}
+    Move(const Pos &p1_, const Pos &p2_):p1(p1_),p2(p2_),isDraw(false){}
     Pos p1,p2;
+    bool isDraw;
 };
 
 /****************************************************************************/
@@ -54,12 +55,15 @@ public:
     int pile_card;
     int tesuu;
     
-    struct _history{
+    typedef struct _history{
         Move m;
         int p1_prev;
         int p2_prev;
         signed char stock_prev[STOCK_LEN+1];
-    }history[26+24+24+24];
+        int nowpos_prev;
+        int round_prev;
+    }History;
+    History history[26+24+24+24];
     
     void init();
     void init(int argc, const char *argv[]);
@@ -135,12 +139,17 @@ void Board::print()
     }
     printf("\n");
     for( int i=0; i<stock_nowpos; i++){printf(" ");}printf("^^\n");
+    assert(stock_nowpos==0 || stock_nowpos<stock_len);
     
     printf("history: ");
     for( int i=0; i<tesuu; i++){
-        history[i].m.p1.print();
-        printf("-");
-        history[i].m.p2.print();
+        if( history[i].m.isDraw ){
+            printf("draw");
+        }else{
+            history[i].m.p1.print();
+            printf("-");
+            history[i].m.p2.print();
+        }
         printf(":");
     }
     printf("\n");
@@ -178,13 +187,13 @@ void Board::search_candidate(Move candidate[16], int *num)
         }
     }
 
-//#ifdef DEBUG
+#ifdef DEBUG
     printf("exposed card: ");
     for( int i=0; i<expo_num; i++){
         printf("%d%d:", exposed[i].layer, exposed[i].x);
     }
     printf("\n");
-//#endif
+#endif
     
     //足して13になる組を検索
     *num = 0;
@@ -215,8 +224,14 @@ void Board::search_candidate(Move candidate[16], int *num)
             (*num)++;
         }
     }
+    
+    //ストックエリア2枚のちぇっく
+    if( stock[stock_nowpos] + stock[stock_nowpos+1] == 13 ){
+        candidate[*num] = Move(Pos::stock1, Pos::stock2);
+        (*num)++;
+    }
 
-//#ifdef DEBUG
+#ifdef DEBUG
     printf("candidate: ");
     for( int i=0; i<*num; i++){
         printf("%d%dx%d%d:", candidate[i].p1.layer,
@@ -224,7 +239,7 @@ void Board::search_candidate(Move candidate[16], int *num)
                              candidate[i].p2.layer,
                              candidate[i].p2.x);
     }
-//#endif
+#endif
 
 }
 
@@ -235,6 +250,8 @@ void Board::record_history(Move m)
     memcpy( history[tesuu].stock_prev, stock, sizeof(stock) );
     history[tesuu].p1_prev = getCard(m.p1);
     history[tesuu].p2_prev = getCard(m.p2);
+    history[tesuu].nowpos_prev = stock_nowpos;
+    history[tesuu].round_prev = stock_round;
     tesuu++;
 }
 
@@ -273,15 +290,19 @@ void Board::remove(Move m)
     if( m.p2.isOnBoard() ){
         tableau[m.p2.layer][m.p2.x] = card_empty;
     }
+    //print();
 }
 /****************************************************************************/
 void Board::remove_stock(int spos)
 {
+    assert(stock[spos] != card_empty);
+    //printf("removing %d, pos=%d, stock_nowpos=%d\n",
+    //            stock[spos], spos, stock_nowpos);
     memmove(&stock[spos], &stock[spos+1], STOCK_LEN-spos);
     stock_len--;
 
     if( spos == stock_nowpos ){
-        if( spos>0 ){ spos--; }
+        if( stock_nowpos>0 ){ stock_nowpos--; }
     }else if( spos == stock_nowpos+1 ){
         //do nothing
     }else{
@@ -328,6 +349,10 @@ void Board::remove_king()
 /****************************************************************************/
 void Board::draw()
 {
+    Move m;
+    m.isDraw = true;
+    record_history(m);
+
     if( isstockend() ){
         assert(!isroundend());
         stock_round++;
@@ -339,9 +364,22 @@ void Board::draw()
 /****************************************************************************/
 void Board::undo()
 {
-    //TODO
-    puts("undo not impemented.");
-    exit(0);
+    //puts("######undo!#######");
+
+    History h = history[tesuu-1];
+    
+    if( h.m.p1.isOnBoard() ){
+        tableau[h.m.p1.layer][h.m.p1.x] = h.p1_prev;
+    }
+    if( h.m.p2.isOnBoard() ){
+        tableau[h.m.p2.layer][h.m.p2.x] = h.p2_prev;
+    }
+    memcpy(stock, h.stock_prev, sizeof(stock) );
+    stock_len = strlen((char*)stock);
+    stock_nowpos = h.nowpos_prev;
+    stock_round  = h.round_prev;
+    
+    tesuu --;
 }
 
 /****************************************************************************/
@@ -415,7 +453,7 @@ void solve(Board &board)
         exit(0);
     }
 
-    board.print();
+    //board.print();
 
     Move candidate[16];
     int  num;
@@ -514,6 +552,15 @@ void FunctionTest::test_test()
     pBoard->print();
     CPPUNIT_ASSERT_EQUAL(0, pBoard->tableau[7][1]);
     CPPUNIT_ASSERT_EQUAL(23, pBoard->stock_len);
+    
+    pBoard->undo();
+    pBoard->print();
+    CPPUNIT_ASSERT_EQUAL(1, pBoard->tableau[7][1]);
+    CPPUNIT_ASSERT_EQUAL(24, pBoard->stock_len);
+
+    pBoard->undo();
+    pBoard->print();
+    CPPUNIT_ASSERT_EQUAL(0, pBoard->stock_round);
 }
 /****************************************************************************/
 int test()
