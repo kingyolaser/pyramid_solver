@@ -1,3 +1,4 @@
 *.exe
 *.bak
 *.o
+*.stackdump
