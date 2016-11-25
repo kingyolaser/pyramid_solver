@@ -8,6 +8,7 @@
 #define LAYERS    7
 #define WIDTH     7
 #define STOCK_LEN 24
+#define STOCK_MAX_ROUND 3
 
 class Pos{
 public:
@@ -19,9 +20,12 @@ public:
     static const Pos stock1;
     static const Pos stock2;
     static const Pos nopos;
+    bool isOnBoard(){return layer>=1;}
+    bool operator==(const Pos &p2)const{return x==p2.x && layer==p2.layer;}
+    bool operator!=(const Pos &p2)const{return x!=p2.x || layer!=p2.layer;}
 };
-const Pos Pos::stock1(-1,-1);
-const Pos Pos::stock2(-2,-2);
+const Pos Pos::stock1(-1,-1); //右
+const Pos Pos::stock2(-2,-2); //左
 const Pos Pos::nopos(0,0);
 
 class Move{
@@ -39,22 +43,34 @@ public:
     };
 
     int tableau[LAYERS+2][WIDTH+2];  //例：[1][1]の上(画面上は下)に[1][2], [2][2]がかぶってる
-    int stock[STOCK_LEN+1];     //stock[0]が最初のカード。末尾にemptyをつける。
+    signed char stock[STOCK_LEN+1];  //stock[0]が最初のカード。末尾にemptyをつける。
     int stock_len;
     int stock_nowpos;
+    int stock_round;
     int pile_card;
     int tesuu;
+    
+    struct _history{
+    }history[26+24+24+24];
     
     void init();
     void init(int argc, const char *argv[]);
     void print();
     
     bool isComplete(){return tableau[1][1]==card_empty;}
+    bool isstockend(){return stock_nowpos+1>=stock_len;}
+    bool isroundend(){return stock_round==STOCK_MAX_ROUND-1;}
+    bool isstockover(){return isstockend() && isroundend();}
     bool isExposed(int layer, int x)const{return tableau[layer+1][x]== card_empty && tableau[layer+1][x+1]==card_empty;};
     bool isremovable(int layer, int x)const;
     void search_candidate(Move candidate[16], int *num);
     
     void remove(int layer1, int x1, int layer2, int x2);
+    void remove(Move m);
+    void remove_stock(int spos);
+    void remove_king();
+    void draw();
+    void undo();
     
     int  c2i(char c);
     char i2c(int i){return " A234567890JQK*"[i];}
@@ -66,7 +82,7 @@ void Board::init()
 {
     memset( tableau, 0, sizeof(tableau) );
     memset( stock,   0, sizeof(stock)   );
-    stock_len = stock_nowpos = pile_card = tesuu = 0;
+    stock_len = stock_nowpos = stock_round = pile_card = tesuu = 0;
 }
 /****************************************************************************/
 void Board::init(int argc, const char *argv[])
@@ -104,7 +120,7 @@ void Board::print()
         printf("\n");
     }
 
-    printf("stock:\n");
+    printf("stock: round=%d\n", stock_round);
     for( int i=0; i<stock_len; i++ ){
         printf("%c", i2c(stock[i]));
     }
@@ -181,11 +197,106 @@ void Board::search_candidate(Move candidate[16], int *num)
 }
 
 /****************************************************************************/
-void Board::remove(int layer1, int x1, int layer2, int x2)
+void Board::remove(Move m)
 {
-    if(tableau[layer1][x1]==13){
-        tableau[layer1][x1] = card_empty;
+    assert( m.p1 != m.p2  );
+    //TODO: 足して13になるチェック
+
+    
+    //先にstock左かチェック(右を先にやるとずれてうまくいかない)
+    if( m.p1 == Pos::stock2 ){
+        assert(stock[stock_nowpos+1] != card_empty);
+        remove_stock(stock_nowpos+1);
+    }else if( m.p2 == Pos::stock2 ){
+        assert(stock[stock_nowpos+1] != card_empty);
+        remove_stock(stock_nowpos+1);
     }
+    
+    //右
+    if( m.p1 == Pos::stock1 ){
+        assert(stock[stock_nowpos] != card_empty);
+        remove_stock(stock_nowpos);
+    }else if( m.p2 == Pos::stock1 ){
+        assert(stock[stock_nowpos] != card_empty);
+        remove_stock(stock_nowpos);
+    }
+    
+    if( m.p1.isOnBoard() ){
+        tableau[m.p1.layer][m.p1.x] = card_empty;
+    }
+    
+    if( m.p2.isOnBoard() ){
+        tableau[m.p2.layer][m.p2.x] = card_empty;
+    }
+}
+/****************************************************************************/
+void Board::remove_stock(int spos)
+{
+    memmove(&stock[spos], &stock[spos+1], STOCK_LEN-spos);
+    stock_len--;
+
+    if( spos == stock_nowpos ){
+        if( spos>0 ){ spos--; }
+    }else if( spos == stock_nowpos+1 ){
+        //do nothing
+    }else{
+        assert(0);
+    }
+}
+
+/****************************************************************************/
+void Board::remove_king()
+{
+    board_check_start:
+    for( int x=1; x<=WIDTH; x++){
+        for( int layer=LAYERS; layer>=1; layer--){
+            if( tableau[layer][x]==card_empty ){continue;}
+            if( isExposed(layer,x) ){
+                if( tableau[layer][x]==13 ){
+                    remove(Move(Pos(layer,x),Pos(0,0)));
+                    goto board_check_start; //2重ループ脱出のためやむなし
+                }
+            }
+            //empty以外なので、どっちにしろもう上を調べる必要なし
+            break;
+        }
+    }
+
+    for(;;){
+        if( stock[stock_nowpos]==13 ){
+            remove(Move(Pos::stock1,Pos(0,0)));
+            continue;
+        }else{
+            break;
+        }
+    }
+
+    for(;;){
+        if( stock[stock_nowpos+1]==13 ){
+            remove(Move(Pos::stock2,Pos(0,0)));
+            continue;
+        }else{
+            break;
+        }
+    }
+}
+/****************************************************************************/
+void Board::draw()
+{
+    if( isstockend() ){
+        assert(!isroundend());
+        stock_round++;
+        stock_nowpos=0;
+    }else{
+        stock_nowpos++;
+    }
+}
+/****************************************************************************/
+void Board::undo()
+{
+    //TODO
+    puts("undo not impemented.");
+    exit(0);
 }
 
 /****************************************************************************/
@@ -250,15 +361,34 @@ void usage()
 /****************************************************************************/
 void solve(Board &board)
 {
+    //kingの除去
+    board.remove_king();
+
     if( board.isComplete() ){
         board.print();
         printf("Congraturation!!\n");
         exit(0);
     }
 
+    board.print();
+
     Move candidate[16];
     int  num;
     board.search_candidate(candidate, &num);
+    for( int i=0; i<num; i++){
+        board.remove(candidate[i]);
+        solve(board);  //もし関数から返ってきたら、NGだったということ
+        board.undo();
+    }
+    //forを抜けてしまった＝removeする手が全NG or removeできない
+    if( !board.isstockover() ){
+        board.draw();
+        solve(board);  //もし関数から返ってきたら、NGだったということ
+        board.undo();
+    }
+    //TODO: stock2枚のremoveの手の処理
+    
+    //ここまで来たら、すべての手がNG,どんずまり。
 }
 
 /****************************************************************************/
@@ -322,8 +452,23 @@ void FunctionTest::test_test()
                      "4q17q0jkq716593394863599"};
     pBoard->init(9, testdata);
     pBoard->print();
-    pBoard->remove(7,3,0,0);
+
+    pBoard->remove(Move(Pos(7,3),Pos(0,0)));  //remove king
+    CPPUNIT_ASSERT_EQUAL(0, pBoard->tableau[7][3]);
+
     pBoard->print();
+    pBoard->draw(); pBoard->draw(); pBoard->draw(); pBoard->draw();
+    pBoard->draw(); pBoard->draw(); pBoard->draw(); pBoard->draw();
+    pBoard->draw(); pBoard->draw(); pBoard->draw(); pBoard->draw();
+    pBoard->draw(); pBoard->draw(); pBoard->draw(); pBoard->draw();
+    pBoard->draw(); pBoard->draw(); pBoard->draw(); pBoard->draw();
+    pBoard->draw(); pBoard->draw(); pBoard->draw(); pBoard->draw();
+    pBoard->print();
+
+    pBoard->remove(Move(Pos(7,1),Pos::stock2));  //remove A-Q
+    pBoard->print();
+    CPPUNIT_ASSERT_EQUAL(0, pBoard->tableau[7][1]);
+    CPPUNIT_ASSERT_EQUAL(23, pBoard->stock_len);
 }
 /****************************************************************************/
 int test()
