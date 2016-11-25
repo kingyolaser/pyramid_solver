@@ -10,6 +10,7 @@
 #define STOCK_LEN 24
 #define STOCK_MAX_ROUND 3
 
+/****************************************************************************/
 class Pos{
 public:
     int layer;
@@ -23,11 +24,13 @@ public:
     bool isOnBoard(){return layer>=1;}
     bool operator==(const Pos &p2)const{return x==p2.x && layer==p2.layer;}
     bool operator!=(const Pos &p2)const{return x!=p2.x || layer!=p2.layer;}
+    void print(){if(layer==-1){printf("st1");}else if(layer==-2){printf("st2");}else{printf("%d%d",layer,x);}}
 };
 const Pos Pos::stock1(-1,-1); //右
 const Pos Pos::stock2(-2,-2); //左
 const Pos Pos::nopos(0,0);
 
+/****************************************************************************/
 class Move{
 public:
     Move(){}
@@ -35,6 +38,7 @@ public:
     Pos p1,p2;
 };
 
+/****************************************************************************/
 class Board{
 public:
     enum{
@@ -51,12 +55,17 @@ public:
     int tesuu;
     
     struct _history{
+        Move m;
+        int p1_prev;
+        int p2_prev;
+        signed char stock_prev[STOCK_LEN+1];
     }history[26+24+24+24];
     
     void init();
     void init(int argc, const char *argv[]);
     void print();
     
+    int  getCard(Pos p);
     bool isComplete(){return tableau[1][1]==card_empty;}
     bool isstockend(){return stock_nowpos+1>=stock_len;}
     bool isroundend(){return stock_round==STOCK_MAX_ROUND-1;}
@@ -65,7 +74,7 @@ public:
     bool isremovable(int layer, int x)const;
     void search_candidate(Move candidate[16], int *num);
     
-    void remove(int layer1, int x1, int layer2, int x2);
+    void record_history(Move m);
     void remove(Move m);
     void remove_stock(int spos);
     void remove_king();
@@ -126,7 +135,30 @@ void Board::print()
     }
     printf("\n");
     for( int i=0; i<stock_nowpos; i++){printf(" ");}printf("^^\n");
+    
+    printf("history: ");
+    for( int i=0; i<tesuu; i++){
+        history[i].m.p1.print();
+        printf("-");
+        history[i].m.p2.print();
+        printf(":");
+    }
+    printf("\n");
 }
+/****************************************************************************/
+int  Board::getCard(Pos p)
+{
+    if( p==Pos::stock1 ){
+        return stock[stock_nowpos];
+    }else if( p==Pos::stock2 ){
+        return stock[stock_nowpos+1];
+    }else if( p==Pos::nopos ){
+        return 0;
+    }else{
+        return tableau[p.layer][p.x];
+    }
+}
+
 /****************************************************************************/
 void Board::search_candidate(Move candidate[16], int *num)
 {
@@ -197,9 +229,22 @@ void Board::search_candidate(Move candidate[16], int *num)
 }
 
 /****************************************************************************/
+void Board::record_history(Move m)
+{
+    history[tesuu].m = m;
+    memcpy( history[tesuu].stock_prev, stock, sizeof(stock) );
+    history[tesuu].p1_prev = getCard(m.p1);
+    history[tesuu].p2_prev = getCard(m.p2);
+    tesuu++;
+}
+
+/****************************************************************************/
 void Board::remove(Move m)
 {
     assert( m.p1 != m.p2  );
+
+    record_history(m);
+    
     //TODO: 足して13になるチェック
 
     
