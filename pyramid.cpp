@@ -77,11 +77,11 @@ public:
     bool isExposed(int layer, int x)const{return tableau[layer+1][x]== card_empty && tableau[layer+1][x+1]==card_empty;};
     bool isremovable(int layer, int x)const;
     void search_candidate(Move candidate[16], int *num);
+    void search_king(Move candidate[16], int *num);
     
     void record_history(Move m);
     void remove(Move m);
     void remove_stock(int spos);
-    void remove_king();
     void draw();
     void undo();
     
@@ -178,7 +178,7 @@ void Board::search_candidate(Move candidate[16], int *num)
         for( int layer=LAYERS; layer>=1; layer--){
             if( tableau[layer][x]==card_empty ){continue;}
             if( isExposed(layer,x) ){
-                assert(expo_num<=7);
+                assert(expo_num<=6);
                 exposed[expo_num] = Pos(layer,x);
                 expo_num++;
             }
@@ -242,6 +242,40 @@ void Board::search_candidate(Move candidate[16], int *num)
 #endif
 
 }
+/****************************************************************************/
+void Board::search_king(Move candidate[16], int *num)
+{
+    //search_candidate と同じI/Fだが、１こ見つけたら終了する。
+    *num = 0;
+    for( int x=1; x<=WIDTH; x++){
+        for( int layer=LAYERS; layer>=1; layer--){
+            if( tableau[layer][x]==card_empty ){continue;}
+            if( isExposed(layer,x) ){
+                if( tableau[layer][x]==13 ){
+                    //発見
+                    candidate[0] = Move(Pos(layer,x),Pos(0,0));
+                    *num=1;
+                    return;
+                }
+            }
+            //empty以外なので、どっちにしろもう上を調べる必要なし
+            break;
+        }
+    }
+
+    if( stock[stock_nowpos]==13 ){
+        candidate[0] = Move(Pos::stock1,Pos(0,0));
+        *num=1;
+        return;
+    }
+
+    if( stock[stock_nowpos+1]==13 ){
+        candidate[0] = Move(Pos::stock2,Pos(0,0));
+        *num=1;
+        return;
+    }
+    //*num = 0 のままreturn;
+}
 
 /****************************************************************************/
 void Board::record_history(Move m)
@@ -262,6 +296,7 @@ void Board::remove(Move m)
 
     record_history(m);
     
+    assert(getCard(m.p1)!=card_empty);
     //TODO: 足して13になるチェック
 
     
@@ -284,10 +319,12 @@ void Board::remove(Move m)
     }
     
     if( m.p1.isOnBoard() ){
+        assert(tableau[m.p1.layer][m.p1.x]!=card_empty);
         tableau[m.p1.layer][m.p1.x] = card_empty;
     }
     
     if( m.p2.isOnBoard() ){
+        assert(tableau[m.p2.layer][m.p2.x]!=card_empty);
         tableau[m.p2.layer][m.p2.x] = card_empty;
     }
     //print();
@@ -311,42 +348,6 @@ void Board::remove_stock(int spos)
 }
 
 /****************************************************************************/
-void Board::remove_king()
-{
-    board_check_start:
-    for( int x=1; x<=WIDTH; x++){
-        for( int layer=LAYERS; layer>=1; layer--){
-            if( tableau[layer][x]==card_empty ){continue;}
-            if( isExposed(layer,x) ){
-                if( tableau[layer][x]==13 ){
-                    remove(Move(Pos(layer,x),Pos(0,0)));
-                    goto board_check_start; //2重ループ脱出のためやむなし
-                }
-            }
-            //empty以外なので、どっちにしろもう上を調べる必要なし
-            break;
-        }
-    }
-
-    for(;;){
-        if( stock[stock_nowpos]==13 ){
-            remove(Move(Pos::stock1,Pos(0,0)));
-            continue;
-        }else{
-            break;
-        }
-    }
-
-    for(;;){
-        if( stock[stock_nowpos+1]==13 ){
-            remove(Move(Pos::stock2,Pos(0,0)));
-            continue;
-        }else{
-            break;
-        }
-    }
-}
-/****************************************************************************/
 void Board::draw()
 {
     Move m;
@@ -369,9 +370,11 @@ void Board::undo()
     History h = history[tesuu-1];
     
     if( h.m.p1.isOnBoard() ){
+        assert(tableau[h.m.p1.layer][h.m.p1.x]==card_empty);
         tableau[h.m.p1.layer][h.m.p1.x] = h.p1_prev;
     }
     if( h.m.p2.isOnBoard() ){
+        assert(tableau[h.m.p2.layer][h.m.p2.x]==card_empty);
         tableau[h.m.p2.layer][h.m.p2.x] = h.p2_prev;
     }
     memcpy(stock, h.stock_prev, sizeof(stock) );
@@ -444,9 +447,6 @@ void usage()
 /****************************************************************************/
 void solve(Board &board)
 {
-    //kingの除去
-    board.remove_king();
-
     if( board.isComplete() ){
         board.print();
         printf("Congraturation!!\n");
@@ -457,19 +457,28 @@ void solve(Board &board)
 
     Move candidate[16];
     int  num;
-    board.search_candidate(candidate, &num);
-    for( int i=0; i<num; i++){
-        board.remove(candidate[i]);
-        solve(board);  //もし関数から返ってきたら、NGだったということ
-        board.undo();
+    
+    //kingのサーチ。１つでもみつかれば、１択として進める。
+    board.search_king(candidate, &num); //この関数は１個見つけたらサーチ終了する
+    if( num!=0 ){
+            board.remove(candidate[0]);
+            solve(board);  //もし関数から返ってきたら、NGだったということ
+            board.undo();
+    }else{
+        //kingが無い
+        board.search_candidate(candidate, &num);
+        for( int i=0; i<num; i++){
+            board.remove(candidate[i]);
+            solve(board);  //もし関数から返ってきたら、NGだったということ
+            board.undo();
+        }
+        //forを抜けてしまった＝removeする手が全NG or removeできない
+        if( !board.isstockover() ){
+            board.draw();
+            solve(board);  //もし関数から返ってきたら、NGだったということ
+            board.undo();
+        }
     }
-    //forを抜けてしまった＝removeする手が全NG or removeできない
-    if( !board.isstockover() ){
-        board.draw();
-        solve(board);  //もし関数から返ってきたら、NGだったということ
-        board.undo();
-    }
-    //TODO: stock2枚のremoveの手の処理
     
     //ここまで来たら、すべての手がNG,どんずまり。
 }
