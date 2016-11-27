@@ -141,11 +141,11 @@ void Board::print()
     }
 
     printf("stock: round=%d\n", stock_round);
-    for( int i=0; i<stock_len+1; i++ ){
+    for( int i=stock_len+1; i>=0; i-- ){
         printf("%c", i2c(stock[i]));
     }
     printf("\n");
-    for( int i=0; i<stock_nowpos; i++){printf(" ");}printf("^^\n");
+    for( int i=0; i<stock_len-stock_nowpos; i++){printf(" ");}printf("^^\n");
     assert(stock_nowpos==0 || stock_nowpos<=stock_len);
     
     printf("history: ");
