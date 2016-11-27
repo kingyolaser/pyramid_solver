@@ -106,6 +106,9 @@ void Board::init(int argc, const char *argv[])
         exit(0);
     }
 
+    //枚数チェック
+    int count[13+1]={0};
+
     //場のデータ格納
     for( int layer=1; layer<=LAYERS; layer++ ){
         if( strlen(argv[layer])!=(size_t)layer){
@@ -114,6 +117,7 @@ void Board::init(int argc, const char *argv[])
         }
         for( int x=1; x<=layer; x++){
             tableau[layer][x] = c2i(argv[layer][x-1]);
+            count[tableau[layer][x]]++;
         }
     }
     
@@ -124,8 +128,17 @@ void Board::init(int argc, const char *argv[])
     }
     for( int i=0; i<STOCK_LEN; i++){ //先頭はempty,[1]～[24]に格納
         stock[i+1]=c2i(argv[LAYERS+1][i]);
+        count[stock[i+1]]++;
     }
     stock_len = STOCK_LEN;
+    
+    //カウント数チェック：すべて４枚ずつであること
+    for( int i=1; i<=13; i++){
+        if( count[i]!=4 ){
+            printf("err: card=%d is not 4 cards.\n",i);
+            exit(1);
+        }
+    }
 }
 
 /****************************************************************************/
