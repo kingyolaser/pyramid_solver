@@ -48,7 +48,7 @@ public:
     };
 
     int tableau[LAYERS+2][WIDTH+2];  //例：[1][1]の上(画面上は下)に[1][2], [2][2]がかぶってる
-    signed char stock[STOCK_LEN+1];  //stock[0]が最初のカード。末尾にemptyをつける。
+    signed char stock[STOCK_LEN+2];  //stock[1]が最初のカード。先頭・末尾にemptyをつける。
     int stock_len;
     int stock_nowpos;
     int stock_round;
@@ -59,7 +59,7 @@ public:
         Move m;
         int p1_prev;
         int p2_prev;
-        signed char stock_prev[STOCK_LEN+1];
+        signed char stock_prev[STOCK_LEN+2];
         int nowpos_prev;
         int round_prev;
     }History;
@@ -71,7 +71,7 @@ public:
     
     int  getCard(Pos p);
     bool isComplete(){return tableau[1][1]==card_empty;}
-    bool isstockend(){return stock_nowpos+1>=stock_len;}
+    bool isstockend(){return stock_nowpos>=stock_len;}
     bool isroundend(){return stock_round==STOCK_MAX_ROUND-1;}
     bool isstockover(){return isstockend() && isroundend();}
     bool isExposed(int layer, int x)const{return tableau[layer+1][x]== card_empty && tableau[layer+1][x+1]==card_empty;};
@@ -115,8 +115,8 @@ void Board::init(int argc, const char *argv[])
     
     //Stockデータ格納
     assert(strlen(argv[LAYERS+1])==STOCK_LEN);
-    for( int i=0; i<STOCK_LEN; i++){
-        stock[i]=c2i(argv[LAYERS+1][i]);
+    for( int i=0; i<STOCK_LEN; i++){ //先頭はempty,[1]～[24]に格納
+        stock[i+1]=c2i(argv[LAYERS+1][i]);
     }
     stock_len = STOCK_LEN;
 }
@@ -134,12 +134,12 @@ void Board::print()
     }
 
     printf("stock: round=%d\n", stock_round);
-    for( int i=0; i<stock_len; i++ ){
+    for( int i=0; i<stock_len+1; i++ ){
         printf("%c", i2c(stock[i]));
     }
     printf("\n");
     for( int i=0; i<stock_nowpos; i++){printf(" ");}printf("^^\n");
-    assert(stock_nowpos==0 || stock_nowpos<stock_len);
+    assert(stock_nowpos==0 || stock_nowpos<=stock_len);
     
     printf("history: ");
     for( int i=0; i<tesuu; i++){
@@ -335,7 +335,7 @@ void Board::remove_stock(int spos)
     assert(stock[spos] != card_empty);
     //printf("removing %d, pos=%d, stock_nowpos=%d\n",
     //            stock[spos], spos, stock_nowpos);
-    memmove(&stock[spos], &stock[spos+1], STOCK_LEN-spos);
+    memmove(&stock[spos], &stock[spos+1], sizeof(stock)-spos-1);
     stock_len--;
 
     if( spos == stock_nowpos ){
@@ -378,7 +378,7 @@ void Board::undo()
         tableau[h.m.p2.layer][h.m.p2.x] = h.p2_prev;
     }
     memcpy(stock, h.stock_prev, sizeof(stock) );
-    stock_len = strlen((char*)stock);
+    stock_len = strlen((char*)&stock[1]);
     stock_nowpos = h.nowpos_prev;
     stock_round  = h.round_prev;
     
@@ -555,6 +555,7 @@ void FunctionTest::test_test()
     pBoard->draw(); pBoard->draw(); pBoard->draw(); pBoard->draw();
     pBoard->draw(); pBoard->draw(); pBoard->draw(); pBoard->draw();
     pBoard->draw(); pBoard->draw(); pBoard->draw(); pBoard->draw();
+    pBoard->draw(); pBoard->draw();
     pBoard->print();
 
     pBoard->remove(Move(Pos(7,1),Pos::stock2));  //remove A-Q
@@ -567,6 +568,7 @@ void FunctionTest::test_test()
     CPPUNIT_ASSERT_EQUAL(1, pBoard->tableau[7][1]);
     CPPUNIT_ASSERT_EQUAL(24, pBoard->stock_len);
 
+    pBoard->undo();
     pBoard->undo();
     pBoard->print();
     CPPUNIT_ASSERT_EQUAL(0, pBoard->stock_round);
