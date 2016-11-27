@@ -103,18 +103,25 @@ void Board::init(int argc, const char *argv[])
     init();
     if( argc!= 1+LAYERS+1 ){
         fprintf(stderr, "cmd line option num err.\n");
+        exit(0);
     }
 
     //場のデータ格納
     for( int layer=1; layer<=LAYERS; layer++ ){
-        assert(strlen(argv[layer])==(size_t)layer);
+        if( strlen(argv[layer])!=(size_t)layer){
+            fprintf(stderr, "cmd line option length err.\n");
+            exit(0);
+        }
         for( int x=1; x<=layer; x++){
             tableau[layer][x] = c2i(argv[layer][x-1]);
         }
     }
     
     //Stockデータ格納
-    assert(strlen(argv[LAYERS+1])==STOCK_LEN);
+    if(strlen(argv[LAYERS+1])!=STOCK_LEN){
+        fprintf(stderr, "cmd line option length err.\n");
+        exit(0);
+    }
     for( int i=0; i<STOCK_LEN; i++){ //先頭はempty,[1]～[24]に格納
         stock[i+1]=c2i(argv[LAYERS+1][i]);
     }
@@ -458,9 +465,16 @@ void solve(Board &board)
     Move candidate[16];
     int  num;
     
-    //kingのサーチ。１つでもみつかれば、１択として進める。
-    board.search_king(candidate, &num); //この関数は１個見つけたらサーチ終了する
-    if( num!=0 ){
+    //まずは手が１択状態のチェック
+    //①ストック右が空の場合
+    if( board.stock_nowpos==0 && board.stock[1]!=Board::card_empty){
+        board.draw();
+        solve(board);  //もし関数から返ってきたら、NGだったということ
+        board.undo();
+    
+    }else if( board.search_king(candidate, &num), num!=0 ){ //kingのサーチ。
+        //１つでもみつかれば、１択として進める。
+        //search_kingは１個見つけたらサーチ終了する
             board.remove(candidate[0]);
             solve(board);  //もし関数から返ってきたら、NGだったということ
             board.undo();
