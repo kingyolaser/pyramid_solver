@@ -74,6 +74,7 @@ public:
     bool isstockend(){return stock_nowpos>=stock_len;}
     bool isroundend(){return stock_round==STOCK_MAX_ROUND-1;}
     bool isstockover(){return isstockend() && isroundend();}
+    bool lastMoveIsDraw(){return tesuu>=1 && history[tesuu-1].m.isDraw;}
     bool isExposed(int layer, int x)const{return tableau[layer+1][x]== card_empty && tableau[layer+1][x+1]==card_empty;};
     bool isremovable(int layer, int x)const;
     void search_candidate(Move candidate[16], int *num);
@@ -215,25 +216,30 @@ void Board::search_candidate(Move candidate[16], int *num)
     printf("\n");
 #endif
     
-    //足して13になる組を検索
     *num = 0;
-    for( int i=0; i<expo_num; i++ ){
-        for( int j=i+1; j<expo_num; j++ ){
-            if( tableau[exposed[i].layer][exposed[i].x]
-              + tableau[exposed[j].layer][exposed[j].x] == 13 ){
-                assert(*num<16);
-                candidate[*num] = Move(exposed[i],exposed[j]);
-                (*num)++;
+
+    //足して13になる組を検索
+    //ただし、draw直後の場合は禁則とする。(draw前にできているはず)
+    if( ! lastMoveIsDraw() ){
+        for( int i=0; i<expo_num; i++ ){
+            for( int j=i+1; j<expo_num; j++ ){
+                if( tableau[exposed[i].layer][exposed[i].x]
+                  + tableau[exposed[j].layer][exposed[j].x] == 13 ){
+                    assert(*num<16);
+                    candidate[*num] = Move(exposed[i],exposed[j]);
+                    (*num)++;
+                }
             }
         }
-    }
 
-    //ストックエリアとの組み合わせを検索
-    for( int i=0; i<expo_num; i++ ){
-        if( tableau[exposed[i].layer][exposed[i].x]
-                +stock[stock_nowpos] == 13 ){
-            candidate[*num] = Move(exposed[i], Pos::stock1);
-            (*num)++;
+        //ストックエリアとの組み合わせを検索
+        //ストック右との組み合わせは、draw直後禁足(draw前にできているはず)
+        for( int i=0; i<expo_num; i++ ){
+            if( tableau[exposed[i].layer][exposed[i].x]
+                    +stock[stock_nowpos] == 13 ){
+                candidate[*num] = Move(exposed[i], Pos::stock1);
+                (*num)++;
+            }
         }
     }
 
@@ -479,13 +485,7 @@ void solve(Board &board)
     int  num;
     
     //まずは手が１択状態のチェック
-    //①ストック右が空の場合
-    if( board.stock_nowpos==0 && board.stock[1]!=Board::card_empty){
-        board.draw();
-        solve(board);  //もし関数から返ってきたら、NGだったということ
-        board.undo();
-    
-    }else if( board.search_king(candidate, &num), num!=0 ){ //kingのサーチ。
+    if( board.search_king(candidate, &num), num!=0 ){ //kingのサーチ。
         //１つでもみつかれば、１択として進める。
         //search_kingは１個見つけたらサーチ終了する
             board.remove(candidate[0]);
